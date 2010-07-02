@@ -29,6 +29,25 @@
       <div id="body">
         <div id="left_column">
         <div class="side_group">
+
+            [% IF project %]
+	        <div class="side_panel doc_panel">
+              <p>[% project %]</p>
+              <ul>
+                <li><a href="[% path %][% project %]/Docs/Overview.html">Overview</a>
+                <li><a href="[% path %][% project %]/Docs/Changes.html">Changes</a>
+              </ul>
+            </div>
+            [% END %]
+
+	        <div class="side_panel doc_panel">
+              <p>Functions</p>
+              <ul>
+                <li><a href="[% path %]index-functions.html">Perl functions</a>
+              </ul>
+            </div>
+
+            [% IF 0 %]
 	        <div class="side_panel doc_panel">
               <p>Manual</p>
               <ul>
@@ -52,6 +71,8 @@
                 <li><a href="[% path %]index-platforms.html">Platform Specific</a>
               </ul>
             </div>
+            [% END %]
+
             <div class="side_panel doc_panel">
               <p>Modules</p>
               <ul>
@@ -182,18 +203,16 @@ Explorer 8</a>
     <div id="footer">
       <div id="footer_content">
         <div id="footer_strapline">
-          Official documentation
+          Opera documentation
         </div>
         <div id="footer_links">
           <div id="address">
-            <p class="name">Contact details</p>
-            <p class="address">
-	      Site maintained by <a href="http://perl.jonallen.info">Jon Allen (JJ)</a><br>
-	      See the <a href="http://perl.jonallen.info/projects/perldoc">project page</a> for more details
-	    </p>
+            [% IF project %]
+            <p class="name">[% project %]</p>
+            [% END %]
             <p class="contact">
-              Documentation maintained by the <a href="http://lists.cpan.org/showlist.cgi?name=perl5-porters">Perl 5 Porters</a>
-            </p>
+	        Documentation maintained by <a href="mailto:cosimo@opera.com">Cosimo</a><br>
+	        </p>
           </div>
           <ul class="f1">
             <li>Manual

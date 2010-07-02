@@ -17,7 +17,7 @@
 /* @group Layout */
 
 body {
-	background-color: #300000;
+	background-color: #606060;
 	margin: 0;
 	font-family: "Helvetica Neue", Arial, Helvetica, Geneva, sans-serif;
 }
@@ -303,7 +303,7 @@ div.side_group {
 
 div.side_panel {
 	width: 130px;
-	background: #3b3b3b url(combined-20090925.png) no-repeat 0 -216px;
+	background: #3b3b3b url(combined-opera.png) no-repeat 0 -216px;
 	color: #d8d8d8;
 	padding-right: 8px;
 	font: .8em "Helvetica Neue", Arial, Helvetica, Geneva, sans-serif;
@@ -320,15 +320,15 @@ div.side_panel p {
 }
 
 div.doc_panel p {
-	background: url(combined-20090925.png) -648px -153px;
+	background: url(combined-opera.png) -648px -153px;
 }
 
 div.links_panel p {
-	background: url(combined-20090925.png) -786px -153px;
+	background: url(combined-opera.png) -786px -153px;
 }
 
 div.tools_panel p {
-	background: url(combined-20090925.png) -648px -194px;
+	background: url(combined-opera.png) -648px -194px;
 }
 
 div.side_panel ul {

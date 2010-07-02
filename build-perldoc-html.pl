@@ -98,7 +98,8 @@ die $@ if $@;
 
 #--Compute link addresses for core modules & pragmas-----------------------
 
-foreach my $module (grep {/^[A-Z]/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+#foreach my $module (grep {/^[A-Z]/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+foreach my $module (grep {/^[A-Z]/} Perldoc::Page::list()) {
   my $link = $module;
   $link =~ s!::!/!g;
   $link .= '.html';
@@ -122,7 +123,8 @@ debug("Processed pragmas.");
 my @module_az_links;
 foreach my $module_index ('A'..'Z') {
   my $link;
-  if (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  #if (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  if (grep {/^$module_index/} Perldoc::Page::list()) {
     $link = "index-modules-$module_index.html";
   } 
   push @module_az_links, {letter=>$module_index, link=>$link};
@@ -231,12 +233,12 @@ foreach my $module_index ('A'..'Z') {
   $page_data{content_tt}  = 'module_index.tt';
   $page_data{module_az}   = \@module_az_links;
   
-  foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
+  #foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
+  foreach my $module (grep {/^$module_index/} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
     (my $module_link = $module) =~ s/::/\//g;
     $module_link .= '.html';
     push @{$page_data{module_links}}, {name=>$module, title=>Perldoc::Page::title($module), url=>$module_link};
   }
- 
 
   my $filename = catfile($Perldoc::Config::option{output_path},$page_data{pageaddress});
   debug("Generating modules index $module_index ($filename)");
@@ -245,33 +247,40 @@ foreach my $module_index ('A'..'Z') {
 
   $template->process($tmpl_file,{%Perldoc::Config::option, %page_data},$filename) || die $template->error;
 
-  foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  #foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  foreach my $module (grep {/^$module_index/} Perldoc::Page::list()) {
     my %module_data;
     (my $module_link = $module) =~ s/::/\//g;
 
     warn "    - module $module\n";
 
     # These modules bomb. why?
-    next if $module eq 'Module::Build' || $module eq 'Net::Config' || $module eq 'Tie::Hash' || $module eq 'Win32';
+    next if $module eq 'Apache::Session::DB_File' || $module eq 'APR::Const' || $module eq 'Module::Build' || $module eq 'Net::Config' || $module eq 'Tie::Hash' || $module eq 'Win32';
 
-    $module_data{pageaddress} = "$module_link.html";
-    $module_data{contentpage} = 1;
-    $module_data{pagename}    = $module;
-    $module_data{pagedepth}   = 0 + $module =~ s/::/::/g;
-    $module_data{path}        = '../' x $module_data{pagedepth};
-    $module_data{breadcrumbs} = [ 
-                                  {name=>"Core modules ($module_index)", url=>"index-modules-$module_index.html"} ];
-    $module_data{content_tt}  = 'page.tt';
-    $module_data{pdf_link}    = "$module_link.pdf";
-    $module_data{module_az}   = \@module_az_links;
+    eval {
+        $module_data{pageaddress} = "$module_link.html";
+        $module_data{contentpage} = 1;
+        $module_data{pagename}    = $module;
+        $module_data{pagedepth}   = 0 + $module =~ s/::/::/g;
+        $module_data{path}        = '../' x $module_data{pagedepth};
+        $module_data{breadcrumbs} = [ 
+                                      {name=>"Core modules ($module_index)", url=>"index-modules-$module_index.html"} ];
+        $module_data{content_tt}  = 'page.tt';
+        $module_data{pdf_link}    = "$module_link.pdf";
+        $module_data{module_az}   = \@module_az_links;
 
-    $module_data{pod_html}    = Perldoc::Page::Convert::html($module);
-    $module_data{page_index}  = Perldoc::Page::Convert::index($module);
+        $module_data{pod_html}    = Perldoc::Page::Convert::html($module);
+        $module_data{page_index}  = Perldoc::Page::Convert::index($module);
 
-    my $filename = catfile($Perldoc::Config::option{output_path},$module_data{pageaddress});
-    check_filepath($filename);
+        my $filename = catfile($Perldoc::Config::option{output_path},$module_data{pageaddress});
+        check_filepath($filename);
 
-    $template->process($tmpl_file,{%Perldoc::Config::option, %module_data},$filename) || die "Failed processing $module\n".$template->error;
+        $template->process($tmpl_file,{%Perldoc::Config::option, %module_data},$filename) || die "Failed processing $module\n".$template->error;
+    } or do {
+        warn "*** MODULE $module FAILED: $@\n";
+        next;
+    }
+
   }
 }
 
