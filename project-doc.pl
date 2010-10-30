@@ -474,7 +474,6 @@ sub parse_options {
         'output-path' => '=s',
         'template'    => '=s',
         'template-path'=>'=s',
-        'download'    => '!',
         'pdf'         => '!',
         'perl'        => '=s',
         'project'     => '=s',
@@ -485,9 +484,11 @@ sub parse_options {
     my %options;
     GetOptions( \%options, optionspec(%specifiers) );
 
-    #--Check mandatory options have been given---------------------------------
+    # Used in the templates to generate relative links
+    $options{download} = 1;
 
-    my @mandatory_options = qw/ output-path /;
+    #--Check mandatory options have been given---------------------------------
+    my @mandatory_options = qw(output-path);
 
     foreach (@mandatory_options) {
         (my $option = $_) =~ tr/-/_/;
@@ -497,13 +498,11 @@ sub parse_options {
     }
 
     my $tmpl_path = $options{template_path} ||= './docs/templates';
-    my $tmpl_file = $options{template} ||= 'default.tt';
+    my $tmpl_file = $options{template}      ||= 'default.tt';
 
-
-    #--Check the output path exists--------------------------------------------
+    #--Create output path folder if it doesn't exist---------------------------
 
     unless (-d $options{output_path}) {
-        #die "Output path '$options{output_path}' does not exist!\n";
         mkpath($options{output_path}, 0, 0755);
     }
 
