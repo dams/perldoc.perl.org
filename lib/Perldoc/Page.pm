@@ -24,13 +24,18 @@ our %CoreList = (
 my $search = Pod::Simple::Search->new->inc(FALSE)->laborious(TRUE);
 #warn "Perldoc::Page searching for Pod";
 my $n2p    = $search->survey(
-                  (grep {$_ !~ /site|vendor/ && $_ !~ /^\.$/ && $_ =~ /$Perldoc::Config::option{perl_version}/} expand(@{$Perldoc::Config::option{inc}})),
+                  #(grep {$_ !~ /site|vendor/ && $_ !~ /^\.$/ && $_ =~ /$Perldoc::Config::option{perl_version}/} expand(@{$Perldoc::Config::option{inc}})),
+                  expand(@{$Perldoc::Config::option{inc}}),
                   expand($Perldoc::Config::option{bin}),
                  # map {"$Perldoc::Config::option{perl_source}/$_"} qw/ext lib pod/
                 );
 
 #my $n2p = $search->survey(map {"/Users/jj/perl/src/perl-5.8.8/$_"} qw/ext lib pod/); 
-                
+
+#for (sort keys %{ $n2p }) {
+#    print STDERR "    $_ => $n2p->{$_}\n";
+#}
+
 our %name2path = map {
                    my $path = $n2p->{$_};
                    s/^pods:://;
@@ -76,7 +81,11 @@ sub pod {
   my $page = shift;
   unless (exists $name2pod{$page}) {
     local $/ = undef;
-    open POD,'<',Perldoc::Page::filename($page) or confess("Cannot open POD for $page");
+    my $file = Perldoc::Page::filename($page);
+    if (! $file) {
+        croak "Perldoc file for page '$page' not found?";
+    }
+    open POD,'<',$file or confess("Cannot open POD for $page ($file)");
     my $pod = (<POD>);
     $pod =~ s/\r//g;
     $name2pod{$page} = $pod;

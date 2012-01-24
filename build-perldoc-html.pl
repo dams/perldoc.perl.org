@@ -32,6 +32,7 @@ use constant TT_INCLUDE_PATH => "$Bin/templates";
 
 my %specifiers = (
   'output-path' => '=s',
+  'template'    => '=s',
   'download'    => '!',
   'pdf'         => '!',
   'perl'        => '=s',
@@ -50,6 +51,8 @@ foreach (@mandatory_options) {
     die "Option '$_' must be specified!\n";
   }
 }
+
+my $tmpl_file = $options{template} ||= 'default.tt';
 
 
 #--Check the output path exists--------------------------------------------
@@ -95,12 +98,15 @@ die $@ if $@;
 
 #--Compute link addresses for core modules & pragmas-----------------------
 
-foreach my $module (grep {/^[A-Z]/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+#foreach my $module (grep {/^[A-Z]/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+foreach my $module (grep {/^[A-Z]/} Perldoc::Page::list()) {
   my $link = $module;
   $link =~ s!::!/!g;
   $link .= '.html';
   $core_modules{$module} = $link;
 }
+
+debug("Core modules list generated (" . scalar(keys(%core_modules)) . " modules found).");
 
 foreach my $section (Perldoc::Section::list()) {
   next unless $section eq 'pragmas';
@@ -112,10 +118,13 @@ foreach my $section (Perldoc::Section::list()) {
   }
 }
 
+debug("Processed pragmas.");
+
 my @module_az_links;
 foreach my $module_index ('A'..'Z') {
   my $link;
-  if (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  #if (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  if (grep {/^$module_index/} Perldoc::Page::list()) {
     $link = "index-modules-$module_index.html";
   } 
   push @module_az_links, {letter=>$module_index, link=>$link};
@@ -144,7 +153,12 @@ $Perldoc::Config::option{last_update} = "$date $month $year";
 
 #--Create index pages------------------------------------------------------
 
+debug("Sections: " . join(', ', Perldoc::Section::list()));
+
 foreach my $section (Perldoc::Section::list()) {
+
+  debug("Generating documentation section $section");
+
   my %index_data;
   my $template             = Template->new(INCLUDE_PATH => TT_INCLUDE_PATH);
   $index_data{pagedepth}   = 0;
@@ -153,7 +167,7 @@ foreach my $section (Perldoc::Section::list()) {
   $index_data{pageaddress} = "index-$section.html";
   $index_data{content_tt}  = 'section_index.tt';
   $index_data{module_az}   = \@module_az_links;
-  
+
   foreach my $page (Perldoc::Section::pages($section)) {
     (my $page_link = $page) =~ s/::/\//g;
     push @{$index_data{section_pages}},{name=>$page, link=>"$page_link.html",title=>Perldoc::Page::title($page)};
@@ -161,10 +175,11 @@ foreach my $section (Perldoc::Section::list()) {
 
   my $htmlfile = catfile($Perldoc::Config::option{output_path},$index_data{pageaddress});
   check_filepath($htmlfile);
-  
-  $template->process('default.tt',{%Perldoc::Config::option, %index_data},$htmlfile) || die $template->error;
-  
+  $template->process($tmpl_file, {%Perldoc::Config::option, %index_data},$htmlfile) || die $template->error;
+
   # For every index page, create the corresponding man pages
+  debug('Section pages: (' . join(', ', Perldoc::Section::pages($section)) . ')');
+
   foreach my $page (Perldoc::Section::pages($section)) {
     next if ($page eq 'perlfunc');  # 'perlfunc' will be created later
     my %page_data;
@@ -178,21 +193,34 @@ foreach my $section (Perldoc::Section::list()) {
     $page_data{breadcrumbs} = [ {name=>Perldoc::Section::name($section), url=>"index-$section.html"} ];
     $page_data{content_tt}  = 'page.tt';
     $page_data{pdf_link}    = "$page_link.pdf";
-    $page_data{pod_html}    = Perldoc::Page::Convert::html($page);
-    $page_data{pod_html}    =~ s!<(pre class="verbatim")>(.+?)<(/pre)>!autolink($1,$2,$3,$page_data{path})!sge if ($page eq 'perl');
-    $page_data{page_index}  = Perldoc::Page::Convert::index($page);
+    debug("    - Before convert::html $page");
+
+    # 're' causes the script to silently abort for no apparent reason
+    next if $page eq 're' || $page eq 'instmodsh';
+
+    eval {
+        $page_data{pod_html}    = Perldoc::Page::Convert::html($page);
+        $page_data{pod_html}    =~ s!<(pre class="verbatim")>(.+?)<(/pre)>!autolink($1,$2,$3,$page_data{path})!sge if ($page eq 'perl');
+        $page_data{page_index}  = Perldoc::Page::Convert::index($page);
+    } or do {
+        debug("    (FAILED with '$@')");
+    };
 
     my $filename  = catfile($Perldoc::Config::option{output_path},$page_data{pageaddress});    
-    check_filepath($filename);
-    
-    $template->process('default.tt',{%Perldoc::Config::option, %page_data},$filename) || die "Failed processing $page\n".$template->error;
-  }  
-}
+    debug("    - Generating page $page ($filename)");
 
+    check_filepath($filename);
+
+    $template->process($tmpl_file,{%Perldoc::Config::option, %page_data},$filename) || die "Failed processing $page\n".$template->error;
+  }
+
+}
 
 #--------------------------------------------------------------------------
 #--Perl core modules-------------------------------------------------------
 #--------------------------------------------------------------------------
+
+debug("Generating core modules index...");
 
 foreach my $module_index ('A'..'Z') {
   my %page_data;
@@ -205,37 +233,54 @@ foreach my $module_index ('A'..'Z') {
   $page_data{content_tt}  = 'module_index.tt';
   $page_data{module_az}   = \@module_az_links;
   
-  foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
+  #foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
+  foreach my $module (grep {/^$module_index/} sort {uc $a cmp uc $b} Perldoc::Page::list()) {
     (my $module_link = $module) =~ s/::/\//g;
     $module_link .= '.html';
     push @{$page_data{module_links}}, {name=>$module, title=>Perldoc::Page::title($module), url=>$module_link};
   }
-  
+
   my $filename = catfile($Perldoc::Config::option{output_path},$page_data{pageaddress});
+  debug("Generating modules index $module_index ($filename)");
+
   check_filepath($filename);
-  
-  $template->process('default.tt',{%Perldoc::Config::option, %page_data},$filename) || die $template->error;
-  
-  foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+
+  $template->process($tmpl_file,{%Perldoc::Config::option, %page_data},$filename) || die $template->error;
+
+  #foreach my $module (grep {/^$module_index/ && exists($Perldoc::Page::CoreList{$_})} Perldoc::Page::list()) {
+  foreach my $module (grep {/^$module_index/} Perldoc::Page::list()) {
     my %module_data;
     (my $module_link = $module) =~ s/::/\//g;
-    $module_data{pageaddress} = "$module_link.html";
-    $module_data{contentpage} = 1;
-    $module_data{pagename}    = $module;
-    $module_data{pagedepth}   = 0 + $module =~ s/::/::/g;
-    $module_data{path}        = '../' x $module_data{pagedepth};
-    $module_data{breadcrumbs} = [ 
-                                  {name=>"Core modules ($module_index)", url=>"index-modules-$module_index.html"} ];
-    $module_data{content_tt}  = 'page.tt';
-    $module_data{pdf_link}    = "$module_link.pdf";
-    $module_data{module_az}   = \@module_az_links;
-    $module_data{pod_html}    = Perldoc::Page::Convert::html($module);
-    $module_data{page_index}  = Perldoc::Page::Convert::index($module);
-                                
-    my $filename = catfile($Perldoc::Config::option{output_path},$module_data{pageaddress});
-    check_filepath($filename);
-    
-    $template->process('default.tt',{%Perldoc::Config::option, %module_data},$filename) || die "Failed processing $module\n".$template->error;
+
+    warn "    - module $module\n";
+
+    # These modules bomb. why?
+    next if $module eq 'Apache::Session::DB_File' || $module eq 'APR::Const' || $module eq 'Module::Build' || $module eq 'Net::Config' || $module eq 'Tie::Hash' || $module eq 'Win32';
+
+    eval {
+        $module_data{pageaddress} = "$module_link.html";
+        $module_data{contentpage} = 1;
+        $module_data{pagename}    = $module;
+        $module_data{pagedepth}   = 0 + $module =~ s/::/::/g;
+        $module_data{path}        = '../' x $module_data{pagedepth};
+        $module_data{breadcrumbs} = [ 
+                                      {name=>"Core modules ($module_index)", url=>"index-modules-$module_index.html"} ];
+        $module_data{content_tt}  = 'page.tt';
+        $module_data{pdf_link}    = "$module_link.pdf";
+        $module_data{module_az}   = \@module_az_links;
+
+        $module_data{pod_html}    = Perldoc::Page::Convert::html($module);
+        $module_data{page_index}  = Perldoc::Page::Convert::index($module);
+
+        my $filename = catfile($Perldoc::Config::option{output_path},$module_data{pageaddress});
+        check_filepath($filename);
+
+        $template->process($tmpl_file,{%Perldoc::Config::option, %module_data},$filename) || die "Failed processing $module\n".$template->error;
+    } or do {
+        warn "*** MODULE $module FAILED: $@\n";
+        next;
+    }
+
   }
 }
 
@@ -271,6 +316,8 @@ $function_data{breadcrumbs} = [ {name=>'Language reference', url=>'index-languag
 $function_data{content_tt}  = 'function_index.tt';
 $function_data{module_az}   = \@module_az_links;
 
+debug("Generating documentation for functions...");
+
 foreach my $letter ('A'..'Z') {
   my ($link,@functions);
   if (my @function_list = grep {/^[^a-z]*$letter/i} sort (Perldoc::Function::list())) {
@@ -288,7 +335,7 @@ foreach my $letter ('A'..'Z') {
 my $filename = catfile($Perldoc::Config::option{output_path},$function_data{pageaddress});
 check_filepath($filename);
 
-$function_template->process('default.tt',{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing function A-Z\n".$function_template->error;
+$function_template->process($tmpl_file,{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing function A-Z\n".$function_template->error;
 
 
 #--Create 'functions by category' index page-------------------------------
@@ -313,7 +360,7 @@ foreach my $category (Perldoc::Function::Category::list()) {
 $filename = catfile($Perldoc::Config::option{output_path},$function_data{pageaddress});
 check_filepath($filename);
 
-$function_template->process('default.tt',{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing functions by category\n".$function_template->error;
+$function_template->process($tmpl_file,{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing functions by category\n".$function_template->error;
 
 
 #--Create 'perlfunc' page--------------------------------------------------
@@ -328,7 +375,7 @@ $function_data{pod_html}    = Perldoc::Page::Convert::html('perlfunc');
 $filename = catfile($Perldoc::Config::option{output_path},$function_data{pageaddress});
 check_filepath($filename);
 
-$function_template->process('default.tt',{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing perlfunc\n".$function_template->error;
+$function_template->process($tmpl_file,{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing perlfunc\n".$function_template->error;
 
 
 #--Function variables------------------------------------------------------
@@ -339,6 +386,8 @@ $function_data{path}        = '../' x $function_data{pagedepth};
 
 
 #--Create individual function pages----------------------------------------
+
+debug("Generating perlfunc documentation...");
 
 foreach my $function (Perldoc::Function::list()) {
   local $processing_state = 'functions';
@@ -357,7 +406,7 @@ foreach my $function (Perldoc::Function::list()) {
   $filename  = catfile($Perldoc::Config::option{output_path},$function_data{pageaddress});
   check_filepath($filename);
   
-  $function_template->process('default.tt',{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing perlfunc\n".$function_template->error;
+  $function_template->process($tmpl_file,{%Perldoc::Config::option, %function_data},$filename) || die "Failed processing perlfunc\n".$function_template->error;
 }
 
 
@@ -392,5 +441,10 @@ sub optionspec {
     push @getopt_list,"$getopt_name$spec";
   }
   return @getopt_list;
+}
+
+sub debug {
+    my $verbose = 1;
+    print STDERR @_, "\n" if $verbose;
 }
 

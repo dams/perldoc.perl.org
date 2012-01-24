@@ -10,6 +10,7 @@ use FindBin qw/$Bin/;
 use Getopt::Long;
 use Shell qw/cp/;
 use Template;
+use Cwd;
 
 use lib "$Bin/lib";
 use Perldoc::Config;
@@ -25,6 +26,7 @@ use constant TT_INCLUDE_PATH => "$Bin/templates";
 my %specifiers = (
   'output-path' => '=s',
   'perl'        => '=s',
+  'template'    => '=s',
   'download'    => '!',
   'pdf'         => '!',
 );                  
@@ -43,6 +45,7 @@ foreach (@mandatory_options) {
   }
 }
 
+my $tmpl_file = $options{template} ||= 'default.tt';
 
 #--Check the output path exists-------------------------------------------
 
@@ -173,8 +176,9 @@ sub create_template_function {
       #if (open OUT,'>',$output_filename) {
       #  print OUT $html;
       #}
-      warn "Writing $output_filename";
-      $template->process('default.tt',{%Perldoc::Config::option, %variables},$output_filename) || die "Failed processing $page\n".$template->error;
+      my $cwd = Cwd::cwd();
+      warn "Writing $output_filename (cwd: $cwd)";
+      $template->process($tmpl_file,{%Perldoc::Config::option, %variables},$output_filename) || die "Failed processing $page\n".$template->error;
     #}   
   }
 }
